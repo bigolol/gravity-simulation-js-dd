@@ -1,0 +1,270 @@
+<html>
+<head>
+<style>
+	body {
+		margin: 0;
+		padding: 0;
+		background-color: white;
+	}
+	#canvas {
+		position: absolute;
+		width: 100%;
+		height: 100%;
+	}
+</style>
+</head>
+<body>
+ <canvas id="canvas"></canvas> 
+</body>
+<script>
+	let c = document.getElementById("canvas");
+	const ctx = c.getContext("2d");
+	let userInput = [];
+	
+	c.addEventListener('click', function(e) {
+		userInput.push(e);
+	})
+	
+	window.addEventListener('keydown', function(e) {
+		userInput.push(e);
+	})
+	
+	window.addEventListener('mousemove', function(e) {
+		userInput.push(e);
+	})
+	
+	
+	ctx.canvas.width  = window.innerWidth;
+	ctx.canvas.height = window.innerHeight;
+	
+	let zoom = 1;
+	let camX = 0;
+	let camY = 0;
+
+
+	function drawCircleCanvas(x,y,r,c) {
+		ctx.beginPath();
+		ctx.arc(x, y, r, 0, 2 * Math.PI);
+		ctx.strokeStyle = c;
+		ctx.fillStyle = c;
+		ctx.fill();
+		ctx.stroke(); 
+	}
+	
+	function drawArrowCanvas(fromx, fromy, tox, toy, c = 'red') {
+					
+			var headlen = 10; // length of head in pixels
+			var dx = tox - fromx;
+			var dy = toy - fromy;
+			var angle = Math.atan2(dy, dx);
+			
+			ctx.strokeStyle = c;
+			ctx.beginPath();
+			ctx.moveTo(fromx, fromy);
+			ctx.lineTo(tox, toy);
+			ctx.lineTo(tox - headlen * Math.cos(angle - Math.PI / 6), toy - headlen * Math.sin(angle - Math.PI / 6));
+			ctx.moveTo(tox, toy);
+			ctx.lineTo(tox - headlen * Math.cos(angle + Math.PI / 6), toy - headlen * Math.sin(angle + Math.PI / 6));
+			ctx.stroke(); 
+		
+	}
+	
+	function centeredCoordsToCanvas(x,y) {
+		let canvasX = (x +  window.innerWidth) / 2;
+		let canvasY = (-y + window.innerHeight) / 2;
+		return {x: canvasX, y : canvasY};
+	}
+	
+	function canvasCoordsToCentered(x,y) {
+		let centeredX = x * 2 - window.innerWidth;
+		let centeredY = -(y * 2 - window.innerHeight);
+		return {x: centeredX, y : centeredY};
+	}
+	
+	function worldToCentered(x,y) {
+		return { x : (x - camX) / zoom, y : (y - camY) / zoom};
+	}
+	
+	function centeredToWorld(x,y) {
+		return {x : (x * zoom) + camX, y : (y * zoom) + camY};
+	}
+	
+	let colors = [];
+	
+	let gravObjs = {
+		amt : 0,
+		xPos : [],
+		yPos : [],
+		xVel : [],
+		yVel : [],
+		masses : [],
+		fX : [],
+		fY : [],
+		G:5000,
+		
+		push : function(x,y,m) {
+			this.amt++;
+			this.xPos.push(x);
+			this.yPos.push(y);
+			this.xVel.push(0);
+			this.yVel.push(0);
+			this.masses.push(m);
+			this.fX.push(0);
+			this.fY.push(0);
+		},
+		
+		update : function(delT) {
+			for(var i = 0; i < this.amt; ++i) {
+				this.fX[i] = 0;
+				this.fY[i] = 0;
+			}	
+
+			for(var i = 0; i < this.amt - 1; ++i) {
+				
+				let x = this.xPos[i];
+				let y = this.yPos[i];
+				let m = this.masses[i];
+				
+				for(var j = i + 1; j < this.amt; j++) {
+					
+					let otherMass = this.masses[j];
+					
+					let xDist = this.xPos[j] - x;
+					let yDist = this.yPos[j] - y;
+					
+					let dist = Math.sqrt(xDist * xDist + yDist * yDist);
+					
+					if(dist <= m + otherMass) {
+						
+					} else {
+						this.fX[i] += (otherMass * xDist) / (dist*dist*dist);
+						this.fY[i] += (otherMass * yDist) / (dist*dist*dist);
+						
+						this.fX[j] -= (m * xDist) / (dist*dist*dist);
+						this.fY[j] -= (m * yDist) / (dist*dist*dist);
+					}					
+					
+					
+					/*if(dist === 0) {
+						dist = .001;
+					}
+					
+					const min = 150;
+					if(dist < min) {
+						xDist = min * (xDist / dist)		
+						yDist = min * (yDist / dist)					
+						dist = min;
+					}*/
+					
+					
+				}		
+			}
+			for(var i = 0; i < this.amt; ++i) {
+				this.xVel[i] += this.G * this.fX[i] * delT;
+				this.yVel[i] += this.G * this.fY[i] * delT;
+				this.xPos[i] += this.xVel[i] * delT;
+				this.yPos[i] += this.yVel[i] * delT;
+			}			
+			
+		},
+		
+		draw: function() {
+			for(var i = 0; i < this.amt; ++i) {
+				
+				centeredCoords = worldToCentered(this.xPos[i],this.yPos[i]);
+				canvasCoords = centeredCoordsToCanvas(centeredCoords.x, centeredCoords.y);
+				drawCircleCanvas(canvasCoords.x, canvasCoords.y, this.masses[i] / zoom, colors[i]);
+				
+				centeredCoordsV = worldToCentered(this.xPos[i] + this.xVel[i], this.yPos[i] + this.yVel[i]);
+				canvasCoordsV = centeredCoordsToCanvas(centeredCoordsV.x,centeredCoordsV.y);
+				drawArrowCanvas(canvasCoords.x, canvasCoords.y, canvasCoordsV.x, canvasCoordsV.y, 'red');
+			}		
+		}		
+	}	
+	
+	function getCursorPosition(canvas, event) {
+		const rect = canvas.getBoundingClientRect()
+		const x = event.clientX - rect.left - camX;
+		const y = event.clientY - rect.top - camY;
+		return {x:x,y:y};
+	}
+	
+	function rgbStr(c1,c2,c3) {
+		return 'rgb('+c1+','+c2+','+c3+')';
+	}
+	
+	function ran(min, max) {  
+	  return Math.floor(
+		Math.random() * (max - min) + min
+	  )
+	}
+
+	let running = false;
+
+	function click(e) {
+		let pos = getCursorPosition(c,e);
+		
+		let centeredPos = canvasCoordsToCentered(pos.x, pos.y);
+		
+		let worldPos = centeredToWorld(centeredPos.x, centeredPos.y);
+		
+		let color = rgbStr(ran(0,220),ran(0,220),ran(0,220));
+		
+		let size = ran(5,30);
+				
+		gravObjs.push(worldPos.x,worldPos.y, size);
+		colors.push(color);
+	}
+	
+	function keydown(e) {
+		if(e.key === '+' && zoom >= .2) {
+			zoom -= .2;
+		}
+		if(e.key === '-') {
+			zoom += .2;
+		}
+		if(e.key === 'ArrowUp') {
+			camY += 10;
+		}
+		if(e.key === 'ArrowDown') {
+			camY -= 10;
+		}
+		if(e.key === 'ArrowLeft') {
+			camX -= 10;
+		}
+		if(e.key === 'ArrowRight') {
+			camX += 10;
+		}if(e.key === 'r') {
+			running = running ? false : true;
+		}
+	}
+
+	function input() {
+		while(userInput.length > 0) {
+			let e = userInput.pop();
+			if(e.type === 'click') {
+				click(e);
+			}else if(e.type === 'keydown') {
+				keydown(e);
+			}
+		}
+	}
+
+	function loop() {			
+		input();
+		
+		if(running) {
+			gravObjs.update(0.1);
+		}
+		ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); 
+		gravObjs.draw();
+		
+		requestAnimationFrame(loop)
+	
+	}
+	
+	requestAnimationFrame(loop)
+	
+	
+</script>
+</html>
